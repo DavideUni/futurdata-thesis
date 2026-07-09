@@ -20,10 +20,20 @@ class DiagramCanvas(tk.Canvas):
     DIAMOND_FILL = "white"
     COMPONENT_FILL = "white"
     BORDER_COLOR = "black"
+    #added colors for root, leaf and intermediate components
+    #plus constants for leaf corner radius and intermediate cut
+    ROOT_COMPONENT_OUTLINE = "#1f2937"
+    LEAF_COMPONENT_OUTLINE = "#15803d"
+    INTERMEDIATE_COMPONENT_OUTLINE = "#92400e"
+    LEAF_COMPONENT_FILL = "#ecfdf5"
+    LEAF_CORNER_RADIUS = 60
+    INTERMEDIATE_CUT = 18
 
     MIN_CANVAS_WIDTH = 2000
     MIN_CANVAS_HEIGHT = 2000
     EXPANSION_MARGIN = 500
+
+
 
     def __init__(self, parent, **kwargs):
         """
@@ -245,6 +255,69 @@ class DiagramCanvas(tk.Canvas):
             shape.x, shape.y, text=shape.text, font=("Arial", 8), fill="black", 
             width=65, tags="shape_text"
         )
+    
+    """method that creates a rounded leaf box clockwise from the top-left corner
+        x1 and y1 are the coordinates of the top-left corner, x2 and y2 are the coordinates of the bottom-right corner, 
+        radius is the radius of the rounded corners""" 
+    def _create_rounded_rectangle(self, x1, y1, x2, y2, radius, **kwargs):
+        """Create a rounded rectangle on the canvas for leaf nodes."""
+        radius = min(radius, abs((x2 - x1) / 2), abs((y2 - y1) / 2))            #limit radius to half the width or height to avoid overlap
+        segments = 16           #number of segments to approximate the rounded corners
+        points = []             #will hold the points for the rounded rectangle
+
+        # Add points of the top edge
+        points.append((x1 + radius, y1))
+        points.append((x2 - radius, y1))
+
+        # Top-right corner
+        for i in range(segments + 1):
+            angle = -math.pi / 2 + (math.pi / 2) * i / segments
+            points.append((x2 - radius + radius * math.cos(angle), y1 + radius + radius * math.sin(angle)))
+
+        # Right edge
+        points.append((x2, y1 + radius))
+        points.append((x2, y2 - radius))
+
+        # Bottom-right corner
+        for i in range(segments + 1):
+            angle = 0 + (math.pi / 2) * i / segments
+            points.append((x2 - radius + radius * math.cos(angle), y2 - radius + radius * math.sin(angle)))
+
+        # Bottom edge
+        points.append((x2 - radius, y2))
+        points.append((x1 + radius, y2))
+
+        # Bottom-left corner
+        for i in range(segments + 1):
+            angle = math.pi / 2 + (math.pi / 2) * i / segments
+            points.append((x1 + radius + radius * math.cos(angle), y2 - radius + radius * math.sin(angle)))
+
+        # Left edge
+        points.append((x1, y2 - radius))
+        points.append((x1, y1 + radius))
+
+        # Top-left corner
+        for i in range(segments + 1):
+            angle = math.pi + (math.pi / 2) * i / segments
+            points.append((x1 + radius + radius * math.cos(angle), y1 + radius + radius * math.sin(angle)))
+
+        # Flatten the list of points for create_polygon
+        flat_points = [coord for point in points for coord in point]
+        return self.create_polygon(flat_points, smooth=False, **kwargs)
+
+    #create a trimmed rectangle for intermediate nodes, with a cut on the top-left and bottom-right corners
+    def _create_trimmed_rectangle(self, x1, y1, x2, y2, trim, **kwargs):
+        points = [
+            x1 + trim, y1,
+            x2 - trim, y1,
+            x2, y1 + trim,
+            x2, y2 - trim,
+            x2 - trim, y2,
+            x1 + trim, y2,
+            x1, y2 - trim,
+            x1, y1 + trim
+        ]
+        return self.create_polygon(points, smooth=False, **kwargs)
 
     def _draw_component_box(self, shape: ComponentBox):
         """
@@ -254,16 +327,43 @@ class DiagramCanvas(tk.Canvas):
             shape (ComponentBox): The target material component element box.
         """
         x1, y1, x2, y2 = shape.get_bounds()
+        node_type = str(shape.properties.get('node_type', '')).strip().lower()
         border_width = 3 if shape.selected else 2
         border_color = self.SELECT_COLOR if shape.selected else self.BORDER_COLOR
 
-        fill_color = self.COMPONENT_FILL
-        if hasattr(shape, 'properties') and shape.properties.get('hex_code'):
-            fill_color = shape.properties['hex_code']
+        if node_type == 'root':
+            shape.shape_id = self.create_rectangle(
+                x1, y1, x2, y2,
+                fill=self.COMPONENT_FILL,
+                outline=self.ROOT_COMPONENT_OUTLINE,
+                width=border_width,
+                tags="shape"
+            )
+            outline_color = self.SELECT_COLOR if shape.selected else self.ROOT_COMPONENT_OUTLINE
+        elif node_type == 'leaf':
+            shape.shape_id = self._create_rounded_rectangle(
+                x1, y1, x2, y2, self.LEAF_CORNER_RADIUS,
+                fill=self.COMPONENT_FILL,
+                outline=self.LEAF_COMPONENT_OUTLINE,
+                width=border_width,
+                tags="shape"
+            )
+            outline_color = self.SELECT_COLOR if shape.selected else self.LEAF_COMPONENT_OUTLINE
+        else:
+            shape.shape_id = self._create_trimmed_rectangle(
+                x1, y1, x2, y2, self.INTERMEDIATE_CUT,
+                fill=self.COMPONENT_FILL,
+                outline=self.INTERMEDIATE_COMPONENT_OUTLINE,
+                width=border_width,
+                tags="shape"
+            )
+            outline_color = self.SELECT_COLOR if shape.selected else self.INTERMEDIATE_COMPONENT_OUTLINE
 
-        shape.shape_id = self.create_rectangle(
-            x1, y1, x2, y2, fill=fill_color, outline=border_color, width=border_width, tags="shape"
-        )
+        if shape.selected:                 #if the shape is selected, change the outline color to the selection color
+            self.itemconfig(shape.shape_id, outline=self.SELECT_COLOR)
+        else:
+            self.itemconfig(shape.shape_id, outline=outline_color)
+            
         shape.text_id = self.create_text(
             shape.x, shape.y, text=shape.text, font=("Arial", 9), fill="black", 
             width=145, tags="shape_text"

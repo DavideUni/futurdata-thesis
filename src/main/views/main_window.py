@@ -122,7 +122,6 @@ class MainWindow:
             relief = tk.SUNKEN,
             command = self.controller.toggle_snap_mode
         )
-
         self.snap_btn.pack(side="left", padx=2)
 
     def _create_main_area(self):
@@ -147,6 +146,7 @@ class MainWindow:
         ttk.Button(palette_frame, text="◇ Diamond Step", command=lambda: self.controller.add_shape("diamond")).pack(fill="x", pady=2)
         ttk.Button(palette_frame, text="→ Arrow", command=lambda: self.controller.add_shape("arrow")).pack(fill="x", pady=2)
 
+        # Resizable workflow structure container
         self.paned_window = ttk.PanedWindow(main_frame, orient="horizontal")
         self.paned_window.pack(side="left", fill="both", expand=True, padx=5, pady=5)
 
@@ -161,6 +161,7 @@ class MainWindow:
         self.canvas = DiagramCanvas(canvas_frame, bg="white")
         self.canvas.pack(side="left", fill="both", expand=True)
 
+        # Connect scrollbars dynamically to viewport mapping
         v_scroll.config(command=self.canvas.yview)
         h_scroll.config(command=self.canvas.xview)
         self.canvas.config(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
@@ -168,7 +169,6 @@ class MainWindow:
         self.paned_window.add(canvas_frame, weight=4)
 
         self.properties_panel = PropertiesPanel(self.paned_window, on_apply_callback=self.controller.apply_properties)
-
         self.paned_window.add(self.properties_panel, weight=1)
 
     def _create_status_bar(self):
@@ -204,6 +204,12 @@ class MainWindow:
         self.root.bind('<Delete>', lambda e: self.controller.delete_selected())
         self.root.bind('<Control-plus>', lambda e: self.controller.zoom_in())
         self.root.bind('<Control-minus>', lambda e: self.controller.zoom_out())
+        self.root.bind('<BackSpace>', lambda e: self.controller.delete_selected())
+        self.root.bind('<Control-a>', lambda e: self.controller.select_all())
+        self.root.bind('<Control-equal>', lambda e: self.controller.zoom_in())
+        self.root.bind('<Control-Shift-equal>', lambda e: self.controller.zoom_in())
+        self.root.bind('<Control-KP_Add>', lambda e: self.controller.zoom_in())
+        self.root.bind('<Control-KP_Subtract>', lambda e: self.controller.zoom_out())
         self.root.bind('<Control-0>', lambda e: self.controller.reset_zoom())
         self.root.bind('<Escape>', lambda e: self.controller.on_escape(e))
         self.root.protocol("WM_DELETE_WINDOW", self.on_exit)
@@ -243,7 +249,7 @@ class MainWindow:
                 widget.select_range(0, tk.END)
                 widget.icursor(tk.END)
                 return "break"
-        except:
+        except Exception:
             pass
 
     def update_ui_state(self):
@@ -288,9 +294,7 @@ class MainWindow:
         self.properties_panel.refresh()
 
     def show_about(self):
-        """
-        Displays an informational standard popup dialog crediting the application.
-        """
+        """Displays an informational standard popup dialog crediting the application."""
         messagebox.showinfo(
             "About",
             "Disassembly Flow Diagram Builder\n\n"
@@ -364,6 +368,12 @@ class MainWindow:
         self.status_label.config(text=f"Info: {message}", foreground="black")
     
     def update_snap_button(self, snap_enabled: bool):
+        """
+        Updates the graphical style parameters of the Snap to Grid toolbar command button.
+
+        Args:
+            snap_enabled (bool): The new operational state targeting grid constraint enforcement.
+        """
         if snap_enabled:
             self.snap_btn.config(text="Snap to Grid: ON", relief=tk.SUNKEN, bg="#e0e0e0")
         else:
