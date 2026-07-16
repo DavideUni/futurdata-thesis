@@ -27,7 +27,7 @@ class MainWindow:
         """
         self.root = root
         self.controller = controller
-        self.root.title("Disassembly Flow Diagram Builder")
+        self.root.title("ARIADNE Disassembly Workflow Builder")
         self.root.geometry("1400x800")
         self.root.minsize(1000, 600)
 
@@ -75,12 +75,21 @@ class MainWindow:
         edit_menu.add_separator()
         edit_menu.add_command(label="Manage Colors...", command=self.controller.show_manage_colors_dialog)
         edit_menu.add_command(label="Manage Materials...", command=self.controller.show_manage_materials_dialog)
+        edit_menu.add_command(label="Manage Tools...", command=self.controller.show_manage_tools_dialog)
         edit_menu.add_separator()
         edit_menu.add_command(label="Clear Canvas", command=self.controller.clear_canvas)
 
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="About", command=self.show_about)
+
+    def _on_delete_key(self, event):
+        focused = event.widget
+
+        if focused.winfo_class() in ("Entry", "TEntry", "Text"):
+            return
+
+        self.controller.delete_selected()
 
     def _create_toolbar(self):
         """
@@ -147,6 +156,7 @@ class MainWindow:
         ttk.Button(palette_frame, text="◇ Diamond Step", command=lambda: self.controller.add_shape("diamond")).pack(fill="x", pady=2)
         ttk.Button(palette_frame, text="→ Arrow", command=lambda: self.controller.add_shape("arrow")).pack(fill="x", pady=2)
 
+        # Resizable workflow structure container
         self.paned_window = ttk.PanedWindow(main_frame, orient="horizontal")
         self.paned_window.pack(side="left", fill="both", expand=True, padx=5, pady=5)
 
@@ -161,6 +171,7 @@ class MainWindow:
         self.canvas = DiagramCanvas(canvas_frame, bg="white")
         self.canvas.pack(side="left", fill="both", expand=True)
 
+        # Connect scrollbars dynamically to viewport mapping
         v_scroll.config(command=self.canvas.yview)
         h_scroll.config(command=self.canvas.xview)
         self.canvas.config(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
@@ -201,9 +212,15 @@ class MainWindow:
         self.root.bind('<Control-Shift-S>', lambda e: self.controller.save_diagram_as())
         self.root.bind('<Control-z>', lambda e: self.controller.undo())
         self.root.bind('<Control-y>', lambda e: self.controller.redo())
-        self.root.bind('<Delete>', lambda e: self.controller.delete_selected())
+        self.root.bind('<BackSpace>', self._on_delete_key)
+        self.root.bind('<Delete>', self._on_delete_key)
         self.root.bind('<Control-plus>', lambda e: self.controller.zoom_in())
         self.root.bind('<Control-minus>', lambda e: self.controller.zoom_out())
+        self.root.bind('<Control-a>', lambda e: self.controller.select_all())
+        self.root.bind('<Control-equal>', lambda e: self.controller.zoom_in())
+        self.root.bind('<Control-Shift-equal>', lambda e: self.controller.zoom_in())
+        self.root.bind('<Control-KP_Add>', lambda e: self.controller.zoom_in())
+        self.root.bind('<Control-KP_Subtract>', lambda e: self.controller.zoom_out())
         self.root.bind('<Control-0>', lambda e: self.controller.reset_zoom())
         self.root.bind('<Escape>', lambda e: self.controller.on_escape(e))
         self.root.protocol("WM_DELETE_WINDOW", self.on_exit)
@@ -219,6 +236,12 @@ class MainWindow:
         
         # Also bind for Combobox entry field
         self.root.bind_class("TCombobox", "<Control-a>", self._select_all_text)
+
+        # Clear any default selection when widgets receive focus.
+        self.root.bind_class("Entry", "<FocusIn>", self._clear_default_selection, add="+")
+        self.root.bind_class("TEntry", "<FocusIn>", self._clear_default_selection, add="+")
+        self.root.bind_class("Text", "<FocusIn>", self._clear_default_selection, add="+")
+        self.root.bind_class("TCombobox", "<FocusIn>", self._clear_default_selection, add="+")
     
     def _select_all_text(self, event):
         """
@@ -243,7 +266,18 @@ class MainWindow:
                 widget.select_range(0, tk.END)
                 widget.icursor(tk.END)
                 return "break"
-        except:
+        except tk.TclError:
+            pass
+
+    def _clear_default_selection(self, event):
+        """Remove any preselected text so focus doesn't keep blue highlighting."""
+        widget = event.widget
+        try:
+            if isinstance(widget, tk.Text):
+                widget.tag_remove("sel", "1.0", "end")
+            elif isinstance(widget, (tk.Entry, ttk.Entry, ttk.Combobox)):
+                widget.selection_clear()
+        except tk.TclError:
             pass
 
     def update_ui_state(self):
@@ -288,14 +322,12 @@ class MainWindow:
         self.properties_panel.refresh()
 
     def show_about(self):
-        """
-        Displays an informational standard popup dialog crediting the application.
-        """
+        """Displays an informational standard popup dialog crediting the application."""
         messagebox.showinfo(
             "About",
-            "Disassembly Flow Diagram Builder\n\n"
+            "ARIADNE Disassembly Workflow Builder\n\n"
             "Version 1.0\n\n"
-            "A visual tool for creating disassembly flow diagrams\n"
+            "A visual tool for creating disassembly workflows\n"
             "for product documentation and analysis.\n\n"
             "Created as part of a thesis project."
         )
@@ -364,6 +396,12 @@ class MainWindow:
         self.status_label.config(text=f"Info: {message}", foreground="black")
     
     def update_snap_button(self, snap_enabled: bool):
+        """
+        Updates the graphical style parameters of the Snap to Grid toolbar command button.
+
+        Args:
+            snap_enabled (bool): The new operational state targeting grid constraint enforcement.
+        """
         if snap_enabled:
             self.snap_btn.config(text="Snap to Grid: ON", relief=tk.SUNKEN, bg="#e0e0e0")
         else:
